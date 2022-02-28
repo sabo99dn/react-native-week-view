@@ -4,7 +4,7 @@ import { View, TouchableWithoutFeedback } from 'react-native';
 import moment from 'moment';
 import memoizeOne from 'memoize-one';
 
-import Event from '../Event/Event';
+import CustomEvent from '../../CustomEvent/CustomEvent/CustomEvent';
 import {
   CONTAINER_HEIGHT,
   CONTAINER_WIDTH,
@@ -14,9 +14,10 @@ import {
   minutesToYDimension,
   CONTENT_OFFSET,
   getTimeLabelHeight,
-} from '../utils';
+  calculateColumnsDataArray
+} from '../../../utils';
 
-import styles from './Events.styles';
+import styles from '../../CustomEvent/CustomEvents/CustomEvents.styles';
 
 const MINUTES_IN_HOUR = 60;
 const EVENT_HORIZONTAL_PADDING = 15;
@@ -115,6 +116,7 @@ const addOverlappedToArray = (baseArr, overlappedArr, itemWidth) => {
   });
 };
 
+
 const getEventsWithPosition = (totalEvents, regularItemWidth, hoursInDisplay, timeToTime) => {
   return totalEvents.map((events) => {
     let overlappedSoFar = []; // Store events overlapped until now
@@ -150,7 +152,7 @@ const getEventsWithPosition = (totalEvents, regularItemWidth, hoursInDisplay, ti
   });
 };
 
-class Events extends PureComponent {
+class CustomEvents extends PureComponent {
   yToHour = (y) => {
     const { hoursInDisplay } = this.props;
     const hour = ((y * hoursInDisplay ) / CONTAINER_HEIGHT);
@@ -164,24 +166,41 @@ class Events extends PureComponent {
   };
 
   processEvents = memoizeOne(
-    (eventsByDate, initialDate, numberOfDays, hoursInDisplay, rightToLeft, timeToTime) => {
+    (eventsByDate, initialDate, numberOfDays, hoursInDisplay, rightToLeft, timeToTime, horizontalData) => {
       // totalEvents stores events in each day of numberOfDays
       // example: [[event1, event2], [event3, event4], [event5]], each child array
       // is events for specific day in range
       const dates = calculateDaysArray(initialDate, numberOfDays, rightToLeft);
-      const totalEvents = dates.map((date) => {
-        const dateStr = date.format(DATE_STR_FORMAT);
-        return eventsByDate[dateStr] || [];
+      const tech = calculateColumnsDataArray(horizontalData, numberOfDays, initialDate)
+      // console.log(tech)
+      // const totalEvents = dates.map((date) => {
+      //   const dateStr = date.format(DATE_STR_FORMAT);
+      //   return eventsByDate[dateStr] || [];
+      // });
+      // console.log(totalEvents)
+      const totalEventsCustom = tech.map((item) => {
+        const EmployeeID = item?.EmployeeID.toString()
+        // console.log(EmployeeID)
+        return eventsByDate[EmployeeID] || [];
       });
+      // console.log(eventsByDate)
+      // console.log(totalEventsCustom)
 
       const regularItemWidth = this.getEventItemWidth();
 
+      // const totalEventsWithPosition = getEventsWithPosition(
+      //   totalEvents,
+      //   regularItemWidth,
+      //   hoursInDisplay,
+      //   timeToTime
+      // );
       const totalEventsWithPosition = getEventsWithPosition(
-        totalEvents,
+        totalEventsCustom,
         regularItemWidth,
         hoursInDisplay,
         timeToTime
       );
+      // console.log(totalEventsWithPosition)
       return totalEventsWithPosition;
     },
   );
@@ -213,16 +232,17 @@ class Events extends PureComponent {
   };
 
   onDragEvent = (event, newX, newY) => {
-    const { onDragEvent } = this.props;
+    const { onDragEvent, horizontalData } = this.props;
     if (!onDragEvent) {
       return;
     }
 
-    const movedDays = Math.floor(newX / this.getEventItemWidth());
+    const movedTech = Math.floor(newX / this.getEventItemWidth());
+    const index = horizontalData.findIndex(i => i.EmployeeID === event.EmployeeID)
+    const newTech = horizontalData[index + movedTech]
 
     const startTime = event.startDate.getTime();
     const newStartDate = new Date(startTime);
-    newStartDate.setDate(newStartDate.getDate() + movedDays);
 
     let newMinutes = this.yToHour(newY - CONTENT_OFFSET) * 60;
     const newHour = Math.floor(newMinutes / 60);
@@ -230,10 +250,11 @@ class Events extends PureComponent {
     newStartDate.setHours(newHour, newMinutes);
 
     const newEndDate = new Date(
-      newStartDate.getTime() + event.originalDuration,
+      newStartDate.getTime() + event?.originalDuration,
     );
 
-    onDragEvent(event, newStartDate, newEndDate);
+    // onDragEvent(event, newStartDate, newEndDate);
+    onDragEvent(event, newStartDate, newEndDate, newTech);
   };
 
   isToday = (dayIndex) => {
@@ -259,6 +280,7 @@ class Events extends PureComponent {
       timeStep,
       onDragEvent,
       timeToTime,
+      horizontalData
     } = this.props;
     const totalEvents = this.processEvents(
       eventsByDate,
@@ -267,6 +289,7 @@ class Events extends PureComponent {
       hoursInDisplay,
       rightToLeft,
       timeToTime,
+      horizontalData,
     );
     const timeSlotHeight = getTimeLabelHeight(hoursInDisplay, timeStep);
 
@@ -291,7 +314,7 @@ class Events extends PureComponent {
             >
               <View style={[styles.eventsColumn, gridColumnStyle]}>
                 {eventsInSection.map((item, index) => (
-                  <Event
+                  <CustomEvent
                     key={index}
                     event={item.data}
                     position={item.style}
@@ -324,9 +347,9 @@ const GridColumnPropType = PropTypes.shape({
 });
 
 
-Events.propTypes = {
+CustomEvents.propTypes = {
   numberOfDays: PropTypes.oneOf(availableNumberOfDays).isRequired,
-  eventsByDate: PropTypes.objectOf(PropTypes.arrayOf(Event.propTypes.event))
+  eventsByDate: PropTypes.objectOf(PropTypes.arrayOf(CustomEvent.propTypes.event))
     .isRequired,
   initialDate: PropTypes.string.isRequired,
   hoursInDisplay: PropTypes.number.isRequired,
@@ -347,4 +370,4 @@ Events.propTypes = {
   timeToTime: PropTypes.object
 };
 
-export default Events;
+export default CustomEvents;

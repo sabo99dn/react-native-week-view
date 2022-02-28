@@ -45,6 +45,15 @@ export const calculateDaysArray = (date, numberOfDays, rightToLeft) => {
   return rightToLeft ? dates.reverse() : dates;
 };
 
+export const calculateColumnsDataArray = (dataArray, numberOfDay, initialData, rightToLeft) => {
+  const columnsData = [];
+  
+  for (let i = 0; i < numberOfDay; i++) {
+    columnsData.push(dataArray[i + initialData])
+  }
+  return rightToLeft ? columnsData.reverse() : columnsData;
+}
+
 export const createFixedWeekDate = (day, hours, minutes = 0, seconds = 0) => {
   const date = moment();
   date.isoWeekday(day);

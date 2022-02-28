@@ -1,15 +1,17 @@
 import React from 'react';
-import { View, Animated } from 'react-native';
+import { View, Animated, Text } from 'react-native';
 import PropTypes from 'prop-types';
+import dayjs from 'dayjs';
 
 import { minutesToYDimension, CONTENT_OFFSET } from '../utils';
 import styles from './NowLine.styles';
 
 const UPDATE_EVERY_MILLISECONDS = 60 * 1000; // 1 minute
 
-const getCurrentTop = (hoursInDisplay) => {
+const getCurrentTop = (hoursInDisplay, timeToTime) => {
   const now = new Date();
-  const minutes = now.getHours() * 60 + now.getMinutes();
+  const {from} = timeToTime
+  const minutes = (now.getHours() * 60 + now.getMinutes()) - from * 60;
   return minutesToYDimension(hoursInDisplay, minutes) + CONTENT_OFFSET;
 };
 
@@ -17,10 +19,11 @@ class NowLine extends React.Component {
   constructor(props) {
     super(props);
 
-    this.initialTop = getCurrentTop(this.props.hoursInDisplay);
+    this.initialTop = getCurrentTop(this.props.hoursInDisplay, this.props.timeToTime);
 
     this.state = {
       currentTranslateY: new Animated.Value(0),
+      text: dayjs().format('h:mm A')
     };
 
     this.intervalCallbackId = null;
@@ -29,6 +32,7 @@ class NowLine extends React.Component {
   componentDidMount() {
     this.intervalCallbackId = setInterval(() => {
       this.updateLinePosition(1000);
+      this.updateText();
     }, UPDATE_EVERY_MILLISECONDS);
   }
 
@@ -41,19 +45,25 @@ class NowLine extends React.Component {
   componentDidUpdate(prevProps) {
     if (prevProps.hoursInDisplay !== this.props.hoursInDisplay) {
       this.updateLinePosition(500);
+      this.updateText();
     }
   }
 
-  updateLinePosition = (animationDuration) => {
-    const newTop = getCurrentTop(this.props.hoursInDisplay);
+  updateLinePosition = animationDuration => {
+    const newTop = getCurrentTop(this.props.hoursInDisplay, this.props.timeToTime);
     Animated.timing(this.state.currentTranslateY, {
       toValue: newTop - this.initialTop,
       duration: animationDuration,
       useNativeDriver: true,
       isInteraction: false,
     }).start();
-  }
 
+    
+  }
+  updateText = () => {
+    const newNo = dayjs()
+    this.setState({...this.state, text: newNo.format('h:mm A')})
+  }
   render() {
     const { color, width } = this.props;
 
@@ -76,7 +86,9 @@ class NowLine extends React.Component {
               backgroundColor: color,
             },
           ]}
-        />
+        >
+        <Text style={styles.text}>{this.state.text}</Text>
+        </View>
       </Animated.View>
     );
   }
@@ -86,6 +98,7 @@ NowLine.propTypes = {
   width: PropTypes.number.isRequired,
   hoursInDisplay: PropTypes.number.isRequired,
   color: PropTypes.string,
+  timeToTime: PropTypes.object
 };
 
 NowLine.defaultProps = {

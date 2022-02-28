@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { Animated, PanResponder, Text, TouchableOpacity } from 'react-native';
-import styles from './Event.styles';
-import { minutesToYDimension, CONTENT_OFFSET } from '../utils';
+import styles from '../CustomEvent/CustomEvent.styles';
+import { minutesToYDimension, CONTENT_OFFSET } from '../../../utils';
 
 const UPDATE_EVENT_ANIMATION_DURATION = 150;
 
@@ -11,7 +11,7 @@ const hasMovedEnough = (gestureState) => {
   return Math.abs(dx) > 2 || Math.abs(dy) > 2;
 };
 
-const Event = ({
+const CustomEvent = ({
   event,
   onPress,
   onLongPress,
@@ -141,7 +141,7 @@ const positionPropType = PropTypes.shape({
   left: PropTypes.number,
 });
 
-Event.propTypes = {
+CustomEvent.propTypes = {
   event: eventPropType.isRequired,
   position: positionPropType.isRequired,
   onPress: PropTypes.func,
@@ -151,4 +151,4 @@ Event.propTypes = {
   onDrag: PropTypes.func,
 };
 
-export default Event;
+export default CustomEvent;
