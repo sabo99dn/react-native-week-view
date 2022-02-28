@@ -1,13 +1,33 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { View, Text } from 'react-native';
+import { View, Text, Dimensions } from 'react-native';
 import styles from './Times.styles';
 import { getTimeLabelHeight } from '../utils';
+import NowLine from '../NowLine/NowLine';
 
-const Times = ({ times, hoursInDisplay, timeStep, textStyle }) => {
+const {width} = Dimensions.get('screen')
+
+const Times = ({ 
+  times, 
+  hoursInDisplay, 
+  timeStep, 
+  textStyle,
+  showNowLine,
+  nowLineColor,
+  timeToTime
+}) => {
   const height = getTimeLabelHeight(hoursInDisplay, timeStep);
   return (
     <View style={styles.columnContainer}>
+    {
+      showNowLine ? (
+      <NowLine
+      color={nowLineColor}
+      hoursInDisplay={hoursInDisplay}
+      width={width}
+      timeToTime={timeToTime}
+      /> ) : null
+    }
       {times.map((time) => (
         <View key={time} style={[styles.label, { height }]}>
           <Text style={[styles.text, textStyle]}>{time}</Text>

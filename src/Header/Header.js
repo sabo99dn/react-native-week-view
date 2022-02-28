@@ -7,6 +7,7 @@ import {
   getFormattedDate,
   calculateDaysArray,
   availableNumberOfDays,
+  calculateColumnsDataArray,
 } from '../utils';
 import styles from './Header.styles';
 
@@ -51,24 +52,37 @@ const Columns = ({
   style,
   textStyle,
   TodayComponent,
+  CustomHeader
 }) => {
-  return (
-    <View style={styles.columns}>
-      {columns.map((column) => {
-        return (
-          <Column
-            style={style}
-            textStyle={textStyle}
-            key={column}
-            column={column}
-            numberOfDays={numberOfDays}
-            format={format}
-            TodayComponent={TodayComponent}
-          />
-        );
-      })}
-    </View>
-  );
+  if(CustomHeader){
+    return (
+      <View style={styles.columns}>
+        {columns.map((column) => {
+          return (
+            <CustomHeader column={column}/>
+          );
+        })}
+      </View>
+    );
+  }else{
+    return (
+      <View style={styles.columns}>
+        {columns.map((column) => {
+          return (
+            <Column
+              style={style}
+              textStyle={textStyle}
+              key={column}
+              column={column}
+              numberOfDays={numberOfDays}
+              format={format}
+              TodayComponent={TodayComponent}
+            />
+          );
+        })}
+      </View>
+    );
+  }
 };
 
 const WeekViewHeader = ({
@@ -79,8 +93,9 @@ const WeekViewHeader = ({
   textStyle,
   TodayComponent,
   rightToLeft,
+  CustomHeader,
 }) => {
-  const columns = calculateDaysArray(initialDate, numberOfDays, rightToLeft);
+  const columns = calculateDaysArray(initialDate, numberOfDays, rightToLeft) ;
   return (
     <View style={styles.container}>
       {columns && (
@@ -91,6 +106,7 @@ const WeekViewHeader = ({
           style={style}
           textStyle={textStyle}
           TodayComponent={TodayComponent}
+          CustomHeader={CustomHeader}
         />
       )}
     </View>

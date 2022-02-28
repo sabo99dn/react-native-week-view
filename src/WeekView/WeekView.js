@@ -17,6 +17,11 @@ import Header from '../Header/Header';
 import Title from '../Title/Title';
 import Times from '../Times/Times';
 import styles from './WeekView.styles';
+
+import CustomEvents from '../Custom/CustomEvent/CustomEvents/CustomEvents'
+import CustomHeader from '../Custom/CustomHeader'
+
+
 import {
   CONTAINER_HEIGHT,
   DATE_STR_FORMAT,
@@ -33,7 +38,7 @@ export default class WeekView extends Component {
     this.eventsGrid = null;
     this.verticalAgenda = null;
     this.header = null;
-    this.pageOffset = 2;
+    this.pageOffset = props.horizontalData ? 0 : 2;
     this.currentPageIndex = this.pageOffset;
     this.eventsGridScrollX = new Animated.Value(0);
 
@@ -44,12 +49,14 @@ export default class WeekView extends Component {
       props.prependMostRecent,
       props.fixedHorizontally,
     );
+    const initialData = props.initialData ? props.initialData : props.horizontalData[0]
     this.state = {
       // currentMoment should always be the first date of the current page
       currentMoment: moment(initialDates[this.currentPageIndex]).toDate(),
       initialDates,
+      currentData: {},
+      initialData,
     };
-
     setLocale(props.locale);
   }
 
@@ -60,6 +67,7 @@ export default class WeekView extends Component {
     this.eventsGridScrollX.addListener((position) => {
       this.header.scrollToOffset({ offset: position.value, animated: false });
     });
+    
   }
 
   componentDidUpdate(prevProps) {
@@ -87,16 +95,19 @@ export default class WeekView extends Component {
         },
       );
     }
+    
   }
 
   componentWillUnmount() {
     this.eventsGridScrollX.removeAllListeners();
   }
 
-  calculateTimes = memoizeOne((minutesStep, formatTimeLabel) => {
+  calculateTimes = memoizeOne((minutesStep, formatTimeLabel, timeToTime) => {
+    const {from, to} = timeToTime
     const times = [];
+    const MAX_MINUTES = 60 * to
     const startOfDay = moment().startOf('day');
-    for (let timer = 0; timer < MINUTES_IN_DAY; timer += minutesStep) {
+    for (let timer = from * minutesStep ; timer <= MAX_MINUTES ; timer += minutesStep) {
       const time = startOfDay.clone().minutes(timer);
       times.push(time.format(formatTimeLabel));
     }
@@ -105,8 +116,8 @@ export default class WeekView extends Component {
 
   scrollToVerticalStart = () => {
     if (this.verticalAgenda) {
-      const { startHour, hoursInDisplay } = this.props;
-      const startHeight = (startHour * CONTAINER_HEIGHT) / hoursInDisplay;
+      const { startHour, hoursInDisplay, timeToTime } = this.props;
+      const startHeight = ((startHour - timeToTime.from) * CONTAINER_HEIGHT) / hoursInDisplay;
       this.verticalAgenda.scrollTo({ y: startHeight, x: 0, animated: false });
     }
   };
@@ -232,6 +243,66 @@ export default class WeekView extends Component {
     const { onSwipePrev, onSwipeNext } = this.props;
     const { initialDates } = this.state;
 
+    const newPage = Math.round((position / innerWidth));
+    const movedPages = newPage - this.currentPageIndex;
+    this.currentPageIndex = newPage;
+
+    if (movedPages === 0) {
+      return;
+    }
+
+    InteractionManager.runAfterInteractions(() => {
+      const newMoment = moment(initialDates[this.currentPageIndex]).toDate();
+      const newState = {
+        currentMoment: newMoment,
+      };
+      let newStateCallback = () => {};
+
+      if (movedPages < 0 && newPage < this.pageOffset) {
+        this.prependPagesInPlace(initialDates, 1);
+        this.currentPageIndex += 1;
+
+        newState.initialDates = [...initialDates];
+        const scrollToCurrentIndex = () =>
+          this.eventsGrid.scrollToIndex({
+            index: this.currentPageIndex,
+            animated: false,
+          });
+        newStateCallback = () => setTimeout(scrollToCurrentIndex, 0);
+      } else if (
+        movedPages > 0 &&
+        newPage >= this.state.initialDates.length - this.pageOffset
+      ) {
+        this.appendPagesInPlace(initialDates, 1);
+
+        newState.initialDates = [...initialDates];
+      }
+
+      this.setState(newState, newStateCallback);
+
+      if (movedPages < 0) {
+        onSwipePrev && onSwipePrev(newMoment);
+      } else {
+        onSwipeNext && onSwipeNext(newMoment);
+      }
+    });
+  };
+
+  scrollDataEnded = (event) => {
+    if (!this.isScrollingHorizontal) {
+      // Ensure the callback is called only once
+      return;
+    }
+    this.isScrollingHorizontal = false;
+
+    const {
+      nativeEvent: { contentOffset, contentSize },
+    } = event;
+    const { x: position } = contentOffset;
+    const { width: innerWidth } = contentSize;
+    const { onSwipePrev, onSwipeNext } = this.props;
+    const { initialDates } = this.state;
+
     const newPage = Math.round((position / innerWidth) * initialDates.length);
     const movedPages = newPage - this.currentPageIndex;
     this.currentPageIndex = newPage;
@@ -312,6 +383,29 @@ export default class WeekView extends Component {
     return prependMostRecent ? initialDates.reverse() : initialDates;
   };
 
+  sortEventByTech = (events) =>{
+    const sortedEvents = {};
+    events.forEach((event) => {
+      const originalDuration =
+      event.endDate.getTime() - event.startDate.getTime();
+      const techID = event.EmployeeID.toString()
+      if (!sortedEvents[techID]) {
+        sortedEvents[techID] = [];
+      }
+      sortedEvents[techID].push({
+        ...event,
+        originalDuration,
+      });
+    })
+    Object.keys(sortedEvents).forEach((tech) => {
+      sortedEvents[tech].sort((a, b) => {
+        return moment(a.startDate).diff(b.startDate, 'minutes');
+      });
+    });
+    return sortedEvents;
+    
+  }
+
   sortEventsByDate = memoizeOne((events) => {
     // Stores the events hashed by their date
     // For example: { "2020-02-03": [event1, event2, ...] }
@@ -363,6 +457,23 @@ export default class WeekView extends Component {
     index,
   });
 
+  //
+  calculatePageData = (data = [], number) => {
+    if(data.length % number === 0 ){
+      return data.length / number
+    }else{
+      return data.length / number + 1
+    }
+  }
+  listIndexBeginPage = (number, maxPage, data = []) => {
+    const listIndex = []
+    for(let i = 0; i < maxPage; i++ ){
+      if(i * number < data.length){
+          listIndex.push(i * number)
+      }
+    }
+    return listIndex
+  }
   render() {
     const {
       showTitle,
@@ -392,14 +503,21 @@ export default class WeekView extends Component {
       onDragEvent,
       isRefreshing,
       RefreshComponent,
+      //custom
+      timeToTime,
+      // CustomHeader,
+      headerHeight,
+      horizontalPagingEnabled,
+      horizontalData,
+      HorizontalCustom
     } = this.props;
     const { currentMoment, initialDates } = this.state;
-    const times = this.calculateTimes(timeStep, formatTimeLabel);
-    const eventsByDate = this.sortEventsByDate(events);
+    const times = this.calculateTimes(timeStep, formatTimeLabel, timeToTime);
+    const eventsByDate = horizontalData ? this.sortEventByTech(events) : this.sortEventsByDate(events);
     const horizontalInverted =
       (prependMostRecent && !rightToLeft) ||
       (!prependMostRecent && rightToLeft);
-
+    const listIndexData = this.listIndexBeginPage(numberOfDays ,this.calculatePageData(horizontalData,numberOfDays), horizontalData)
     return (
       <View style={styles.container}>
         <View style={styles.headerContainer}>
@@ -411,32 +529,48 @@ export default class WeekView extends Component {
             selectedDate={currentMoment}
           />
           <VirtualizedList
+            contentContainerStyle={headerHeight ? {height: headerHeight} : {}}
             horizontal
-            pagingEnabled
+            // pagingEnabled
             inverted={horizontalInverted}
             showsHorizontalScrollIndicator={false}
             scrollEnabled={false}
             ref={this.headerRef}
-            data={initialDates}
+            data={horizontalData ? listIndexData : initialDates }
             getItem={(data, index) => data[index]}
             getItemCount={(data) => data.length}
             getItemLayout={(_, index) => this.getListItemLayout(index)}
-            keyExtractor={(item) => item}
+            keyExtractor={(item, index) => 'a' +  index}
             initialScrollIndex={this.pageOffset}
-            renderItem={({ item }) => {
-              return (
-                <View key={item} style={styles.header}>
-                  <Header
-                    style={headerStyle}
-                    textStyle={headerTextStyle}
-                    TodayComponent={TodayHeaderComponent}
-                    formatDate={formatDateHeader}
-                    initialDate={item}
-                    numberOfDays={numberOfDays}
-                    rightToLeft={rightToLeft}
-                  />
-                </View>
-              );
+            renderItem={({ item, index }) => {
+              if(horizontalData){
+                return (
+                  <View key={item} style={styles.header}>
+                    <CustomHeader 
+                      index={item} 
+                      data={horizontalData} 
+                      numOfDays={numberOfDays}
+                      HorizontalCustom={HorizontalCustom}
+                      />
+                    </View>
+                )
+              }else{
+                return (
+                  <View key={index} style={styles.header}>
+                      <Header
+                      style={headerStyle}
+                      textStyle={headerTextStyle}
+                      TodayComponent={TodayHeaderComponent}
+                      CustomHeader={CustomHeader}
+                      formatDate={formatDateHeader}
+                      initialDate={item}
+                      numberOfDays={numberOfDays}
+                      rightToLeft={rightToLeft}
+                    />
+  
+                  </View>
+                );
+              }
             }}
           />
         </View>
@@ -447,67 +581,97 @@ export default class WeekView extends Component {
           onStartShouldSetResponderCapture={() => false}
           onMoveShouldSetResponderCapture={() => false}
           onResponderTerminationRequest={() => false}
-          ref={this.verticalAgendaRef}>
+          ref={this.verticalAgendaRef}
+          >
           <View style={styles.scrollViewContent}>
             <Times
               times={times}
               textStyle={hourTextStyle}
               hoursInDisplay={hoursInDisplay}
               timeStep={timeStep}
+              showNowLine={showNowLine}
+              nowLineColor={nowLineColor}
+              timeToTime={timeToTime}
             />
             <VirtualizedList
-              data={initialDates}
+              data={ horizontalData ? listIndexData : initialDates }
               getItem={(data, index) => data[index]}
               getItemCount={(data) => data.length}
               getItemLayout={(_, index) => this.getListItemLayout(index)}
-              keyExtractor={(item) => item}
+              keyExtractor={(item, index) => 'b' +  index}
               initialScrollIndex={this.pageOffset}
               scrollEnabled={!fixedHorizontally}
               onStartShouldSetResponderCapture={() => false}
               onMoveShouldSetResponderCapture={() => false}
               onResponderTerminationRequest={() => false}
               renderItem={({ item }) => {
-                return (
-                  <Events
-                    times={times}
-                    eventsByDate={eventsByDate}
-                    initialDate={item}
-                    numberOfDays={numberOfDays}
-                    onEventPress={onEventPress}
-                    onEventLongPress={onEventLongPress}
-                    onGridClick={onGridClick}
-                    onGridLongPress={onGridLongPress}
-                    hoursInDisplay={hoursInDisplay}
-                    timeStep={timeStep}
-                    EventComponent={EventComponent}
-                    eventContainerStyle={eventContainerStyle}
-                    gridRowStyle={gridRowStyle}
-                    gridColumnStyle={gridColumnStyle}
-                    rightToLeft={rightToLeft}
-                    showNowLine={showNowLine}
-                    nowLineColor={nowLineColor}
-                    onDragEvent={onDragEvent}
-                  />
-                );
-              }}
+                if(HorizontalCustom){
+                  return (
+                    <CustomEvents
+                      horizontalData={horizontalData}
+                      times={times}
+                      eventsByDate={eventsByDate}
+                      initialDate={item}
+                      numberOfDays={numberOfDays}
+                      onEventPress={onEventPress}
+                      onEventLongPress={onEventLongPress}
+                      onGridClick={onGridClick}
+                      onGridLongPress={onGridLongPress}
+                      hoursInDisplay={hoursInDisplay}
+                      timeStep={timeStep}
+                      EventComponent={EventComponent}
+                      eventContainerStyle={eventContainerStyle}
+                      gridRowStyle={gridRowStyle}
+                      gridColumnStyle={gridColumnStyle}
+                      rightToLeft={rightToLeft}
+                      onDragEvent={onDragEvent}
+                      timeToTime={timeToTime}
+                    />
+                  );
+                }else{
+                  return (
+                    <Events
+                      times={times}
+                      eventsByDate={eventsByDate}
+                      initialDate={item}
+                      numberOfDays={numberOfDays}
+                      onEventPress={onEventPress}
+                      onEventLongPress={onEventLongPress}
+                      onGridClick={onGridClick}
+                      onGridLongPress={onGridLongPress}
+                      hoursInDisplay={hoursInDisplay}
+                      timeStep={timeStep}
+                      EventComponent={EventComponent}
+                      eventContainerStyle={eventContainerStyle}
+                      gridRowStyle={gridRowStyle}
+                      gridColumnStyle={gridColumnStyle}
+                      rightToLeft={rightToLeft}
+                      onDragEvent={onDragEvent}
+                      timeToTime={timeToTime}
+                    />
+                  );
+                }}
+              }
               horizontal
-              pagingEnabled
+              pagingEnabled={horizontalPagingEnabled}
               inverted={horizontalInverted}
               onMomentumScrollBegin={this.scrollBegun}
               onMomentumScrollEnd={this.scrollEnded}
               scrollEventThrottle={32}
-              onScroll={Animated.event(
-                [
-                  {
-                    nativeEvent: {
-                      contentOffset: {
-                        x: this.eventsGridScrollX,
+              onScroll={
+                Animated.event(
+                  [
+                    {
+                      nativeEvent: {
+                        contentOffset: {
+                          x: this.eventsGridScrollX,
+                        },
                       },
                     },
-                  },
-                ],
-                { useNativeDriver: false },
-              )}
+                  ],
+                  { useNativeDriver: false },
+                )
+              }
               ref={this.eventsGridRef}
             />
           </View>
@@ -551,6 +715,7 @@ WeekView.propTypes = {
   onDragEvent: PropTypes.func,
   isRefreshing: PropTypes.bool,
   RefreshComponent: PropTypes.elementType,
+  timeToTime: PropTypes.object
 };
 
 WeekView.defaultProps = {
@@ -565,4 +730,9 @@ WeekView.defaultProps = {
   rightToLeft: false,
   prependMostRecent: false,
   RefreshComponent: ActivityIndicator,
+  timeToTime: {
+    from: 0,
+    to: 23
+  },
+  horizontalPagingEnabled: true
 };

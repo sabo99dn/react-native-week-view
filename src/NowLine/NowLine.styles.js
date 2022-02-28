@@ -8,15 +8,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     zIndex: 2,
     borderTopWidth: lineWidth,
+    justifyContent: 'center',
   },
   circle: {
     position: 'absolute',
-    top: -(circleSize + lineWidth) / 2,
-    left: 2,
-    borderRadius: circleSize,
-    height: circleSize,
-    width: circleSize,
+    borderRadius: 5,
+    color: 'white',
+    padding: 2
   },
+  text:{
+    color: 'white',
+    fontWeight: '700'
+  }
 });
 
 export default styles;
